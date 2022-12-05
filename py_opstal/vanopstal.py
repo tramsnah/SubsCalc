@@ -143,3 +143,134 @@ def vanopstal(x,y,c,k,xpm,ypm,comp):
 
     return subsidence
     # einde van Van Opstal functie
+
+
+if __name__ == "__main__":
+    import shapefile # This version uses PyShp rather than geopandas
+    from shapely.geometry import Polygon, MultiPolygon, Point
+
+    ###########################################
+    # Read shapefile into polygon
+    shape=[]
+    fname = r".\shapes\test.shp"
+    print("    Loading:", fname)
+    with shapefile.Reader(fname) as sf:
+        shps = sf.shapes()
+        for shp in shps:
+            pts=shp.parts
+            pts.append(len(shp.points)+1)
+            # This is ugly
+            for i in range(len(pts)-1):
+                print(pts[i],pts[i+1])
+                p = Polygon(shp.points[pts[i]:pts[i+1]])
+                shape.append(p)
+    shape=MultiPolygon(shape)
+
+    ###########################################
+    # Other parameters
+    depth=1886.74 # m depth
+    rb=1.2 # fraction
+    Cm=1.41e-5 # 1/bar
+    thick=24.3 # m
+    Pini=206 # bar
+    Paban=15 # bar
+
+    ###########################################
+    # Grid resolution
+    dxy=200 # m
+
+    ###########################################
+    # Bounding box
+    (xmin,ymin,xmax,ymax)=shape.bounds
+    #print(xmin, xmax)
+    #print(ymin, ymax)
+
+    ###########################################
+    # Grid points inside the polygon(s)
+    x=[]
+    y=[]
+    nx=int((xmax-xmin)/dxy+1)
+    ny=int((ymax-ymin)/dxy+1)
+    print(nx,ny)
+    for ii in range(nx):
+        for jj in range(ny):
+            rx=xmin+ii*dxy
+            ry=ymin+jj*dxy
+            # circular reservoir
+            inside=shape.contains(Point(rx,ry))
+            if (inside):
+                x.append(rx)
+                y.append(ry)
+    x=np.array(x)
+    y=np.array(y)
+
+    ###########################################
+    # Grid for calculation
+    # Leave room for the slope of the side of the bowl
+    nxy_xtra=int(depth*3/dxy)+1
+    xming=xmin-nxy_xtra*dxy
+    yming=ymin-nxy_xtra*dxy
+    nxg=nx+2*nxy_xtra
+    nyg=ny+2*nxy_xtra
+    xpm=np.zeros(nxg*nyg)
+    ypm=np.zeros(nxg*nyg)
+    kk=0
+    for ii in range(nxg):
+        for jj in range(nyg):
+            xpm[kk]=xming+ii*dxy
+            ypm[kk]=yming+jj*dxy
+            kk+=1
+
+    ###########################################
+    # Derived parameters
+
+    # Volume of grid cell
+    V=dxy*dxy*thick
+            
+    # Pressure drop to abandonment pressure
+    dP=Pini-Paban
+            
+    # put into compound multiplier
+    tComp=V*dP*Cm;
+
+    ###########################################
+    # Do the deed
+
+    print("starting the calculation...")
+    import time
+    start_time = time.time()
+    #subsidence=VO.vanopstal(x,y,depth,depth*rb,xpm,ypm,tComp)
+    subsidence=vanopstal(x,y,depth,depth*rb,xpm,ypm,tComp)
+    subsidence *= 1000 # m-->mm
+    dt = (time.time() - start_time)
+    print("CPU time:", dt)
+    print("max. subs.",max(subsidence))
+    print("compact   ", dP*thick*Cm*1000)
+    print("---------------")
+    print("max/comp = ",max(subsidence)/(dP*thick*Cm*1000)*100,"%" )
+
+    # Convert 1D back to 2D
+    X2=np.reshape(xpm, (nxg,nyg))
+    Y2=np.reshape(ypm, (nxg,nyg))
+    S2=np.reshape(subsidence, (nxg,nyg))
+
+    ###########################################
+    # Plot
+
+    import matplotlib
+    import matplotlib.pyplot as plt
+
+    # Init plot
+    fig, ax = plt.subplots()
+
+    for s in shape:    
+        xs, ys = s.exterior.xy
+        ax.plot(xs,ys,color="black",linewidth=0.3)
+        
+    # Contours
+    n_levels = 10  # number of contour levels to plot
+    CS=ax.contour(X2, Y2, S2, n_levels)
+
+    # Plot the plot
+    ax.clabel(CS, CS.levels, inline=True)
+    plt.show()
