@@ -152,7 +152,7 @@ if __name__ == "__main__":
     ###########################################
     # Read shapefile into polygon
     shape=[]
-    fname = r".\shapes\test.shp"
+    fname = r".\test_data\test.shp"
     print("    Loading:", fname)
     with shapefile.Reader(fname) as sf:
         shps = sf.shapes()
