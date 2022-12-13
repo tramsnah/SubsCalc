@@ -1,5 +1,7 @@
 import numpy as np
 import pandas as pd
+from datetime import datetime
+
 if __name__ == "__main__": # ugly
     import pvtcorrelation as PVT
 else:
@@ -37,7 +39,7 @@ class dry_gas:
         return p
         
 
-def get_merged_profile(df, c_hist, c_fc, extend_year=2050):
+def get_merged_profile(df, c_hist, c_fc, extend_year=2050, force_january_start=True):
     '''
     Get profiles with keys 'c_hist' and 'c-fc', merge them,
     resample them to monthly, and extend them to 31-12 of the
@@ -46,27 +48,48 @@ def get_merged_profile(df, c_hist, c_fc, extend_year=2050):
         index Profile Date Gp
     '''
     # Get the two profiles from the overarching df
-    df_hist=df[df["Profile"]==c_hist]
-    df_fc=df[df["Profile"]==c_fc]
+    print("    Loading profiles ", "'"+c_hist+"', '" +c_fc+"'")
+    #print(df)
+    df_hist=None
+    if (c_hist is not None) and (c_hist != ""):
+        df_hist=df[df["Profile"]==c_hist]
+        if (len(df_hist) == 0): 
+            df_hist = None
+    df_fc=None
+    if (c_fc is not None) and (c_fc != ""):    
+        df_fc=df[df["Profile"]==c_fc]
+        if (len(df_fc) == 0): 
+            df_fc = None
 
-    # Merge them. Need to find the final history date 
-    # that matches a date in the FC
-    # They need to match *exactly* (TODO: be less sensitive)
-    i = 0
-    while(True):
-        i += 1
-        final_date = df_hist["Date"].values[-i]
-        final_gp = df_hist["Gp"].values[-i]
-        df_fc_suture = df_fc[df_fc["Date"] == final_date]
-        if (len(df_fc_suture)>0): break
-    indx_fc_suture = df_fc_suture.index.values[0]
-    gp_fc_suture=df_fc_suture["Gp"].values[0]
+    # Merge them. if needed\
+    if (df_hist is not None) and (df_fc is not None):
+        # Need to find the final history date 
+        # that matches a date in the FC
+        # They need to match *exactly* (XXX: be less sensitive)
+        i = 0
+        while(True):
+            i += 1
+            final_date = df_hist["Date"].values[-i]
+            final_gp = df_hist["Gp"].values[-i]
+            df_fc_suture = df_fc[df_fc["Date"] == final_date]
+            if (len(df_fc_suture)>0): break
+        indx_fc_suture = df_fc_suture.index.values[0]
+        gp_fc_suture=df_fc_suture["Gp"].values[0]
 
-    # Small adaptation may be needed to merge them seamlessly
-    dgp = final_gp-gp_fc_suture
+        # Small adaptation may be needed to merge them seamlessly
+        dgp = final_gp-gp_fc_suture
 
-    # Then merge
-    df_prod = pd.concat([df_hist.iloc[:-i,:], df_fc.iloc[indx_fc_suture:,:]])
+        # Then merge
+        df_prod = pd.concat([df_hist.iloc[:-i,:], df_fc.iloc[indx_fc_suture:,:]])
+    elif (df_fc is not None):
+        print("        No history data found ", "'"+c_hist+"'")
+        df_prod = df_fc.copy()
+    elif (df_hist is not None):
+        print("        No forecast data found ", "'"+c_fc+"'")
+        df_prod = df_hist.copy()
+    else:
+        print("        No profile data found ", "'"+c_hist+"', '" +c_fc+"'")
+        assert(0)
 
     # Extend it to desired date, if needed
     t_end = pd.to_datetime('31-dec-'+str(int(extend_year)))
@@ -75,6 +98,34 @@ def get_merged_profile(df, c_hist, c_fc, extend_year=2050):
         final_gp_fc = df_prod['Gp'].values[-1]
         df_extend = pd.DataFrame({"Profile": ["Extension"], "Date": [t_end], "Gp": [final_gp_fc]})
         df_prod = pd.concat([df_prod, df_extend])
+
+    # Prepend zeros, if needed, so it starts in January
+    if (force_january_start):
+        # Get first date
+        d0 = df_prod["Date"].values[0]
+        # Get month number of first date
+        m0 = np.datetime64(d0,'M').astype(int) % 12
+        ts=[]
+        gps=[]
+        while (m0 != 0):    
+            # Shift to first day of month
+            d1 = np.datetime64(d0, 'M')
+            d1 = np.datetime64(d1, 'D')
+            # Then subtract one more day (convention is EOM)
+            d1 -= np.timedelta64(1,'D')
+            
+            # Check the month again
+            d0 = d1
+            m0 = np.datetime64(d0,'M').astype(int) % 12
+            
+            # Append, so we get a list of months to be prefixed
+            ts.append(d0)
+        # Prepand the times found
+        if (len(ts)>0):
+            gp0 = df_prod["Gp"].values[0]
+            ts.sort()
+            df_extend = pd.DataFrame({"Profile": ["Prefix"]*len(ts), "Date": ts, "Gp": gp0*len(ts)})
+            df_prod = pd.concat([df_extend, df_prod])
 
     # Set date as index, then resample to monthly
     df_prod.set_index("Date", inplace=True)
@@ -118,22 +169,41 @@ def apply_time_lag(df, tau, value_key="Pressure", extend_year=2050):
  
     return df
     
-def convert_gp_to_pressure(df, p_ini, IGIP, gas = None):
+def convert_gp_to_pressure(df, p_ini, p_aban, IGIP, gas = None):
     '''
     Convert Gp to field average pressure.
-    Assume ideal gas [TODO]
+    Assume ideal gas if gas=None
     Dataframe structure assumed is
         index Profile Date Fp
+    
+    Paban is used (and IGIP calculated), unless None is provided, in which case IGIP is used
+    and Paban calculated.
+    
+    returns a modified gp, p_aban, IGIP
+    
+    Note IGIP is *apparent* *connected* IGIP, not static IGIP
     '''
     
+    gp_final = df["Gp"].values[-1]
+    
     if (gas is None):
+        # Back calculate IGIP, if p_aban provided
+        if (p_aban is not None and p_aban>0):
+            IGIP = gp_final/(1-p_aban/p_ini)
+
         df["Pressure"] = p_ini*(1 - df["Gp"]/IGIP)
     else:
         # For now, ugly
         z_ini = gas.zfactor(p_ini)
         pz_ini = p_ini/z_ini
+
+        # Back calculate IGIP, if p_aban provided
+        if (p_aban is not None and p_aban>0):
+            z_aban = gas.zfactor(p_aban)
+            pz_aban = p_aban/z_aban
+            IGIP = gp_final/(1-pz_aban/pz_ini)
         
-        # This is pz
+        # Linear relationship between Gp and pz
         df["Pressure"] = pz_ini*(1 - df["Gp"]/IGIP)
         
         # Then convert to pressure
@@ -143,8 +213,10 @@ def convert_gp_to_pressure(df, p_ini, IGIP, gas = None):
             pz = p_vals[i]
             p = gas.p_from_pz(pz)
             p_vals[i] = p
-
-    return df
+            
+    p_aban=df["Pressure"].values[-1]
+    
+    return df, p_aban, IGIP
 
 if __name__ == "__main__":
     # Read Profile
