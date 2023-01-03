@@ -1,5 +1,8 @@
 """
 Codes for gas, oil, and water PVT correlations
+
+Interface is in field units.
+
 @author: Yohanes Nuwara
 @email: ign.nuwara97@gmail.com
 """
