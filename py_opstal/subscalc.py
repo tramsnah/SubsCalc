@@ -1,14 +1,17 @@
+'''
+Various utilities (a.o. shapefile read) to support
+van Opstal shape-->bowl calculations
+'''
 import os
 import numpy as np
-import pandas as pd
 import shapefile # This version uses PyShp rather than geopandas
 from shapely.geometry import Polygon, MultiPolygon, Point
 
-if __name__ == "__main__": # ugly
+try: # ugly, but we want it part of the library as well as stand-alone test
     import vanopstal as VO
-else:
+except ImportError:
     from . import vanopstal as VO
-
+    
 ###########################################
 def read_shapefile(shapefolder, shapefl):
     '''
@@ -136,7 +139,8 @@ def calc_subsidence(shape, dxy, depth, rb, tComp, snap_to_grid = True):
     
     return X2, Y2, S2
 
-def plot_subs_countours(X2, Y2, S2, shapes, epsg=23031, c_interval=10, first_level=None):
+def plot_subs_countours(X2, Y2, S2, shapes, epsg=23031, 
+                        c_interval=10, first_level=None, title=None):
     '''
     Plot countours of S2, assuming grid is in X2,Y2
     (all2D numpy arrays).
@@ -179,10 +183,14 @@ def plot_subs_countours(X2, Y2, S2, shapes, epsg=23031, c_interval=10, first_lev
     import contextily as cx
     from pyproj import CRS
     crs = CRS.from_user_input(epsg)
-    cx.add_basemap(ax, crs=crs);
+    cx.add_basemap(ax, crs=crs)
     
     # Smaller fonts work better
     ax.tick_params(axis='both', which='major', labelsize=5)
+    
+    # Title if provided
+    if (title is not None):
+        ax.set_title(title)
 
     # We're done
     print()
@@ -242,13 +250,25 @@ def get_merged_grid(xs, ys):
     # Return results
     return X2big, Y2big, di, dj
 
+##########################################################################################
+# Test code
 if __name__ == "__main__":
-    import shapefile # This version uses PyShp rather than geopandas
-    from shapely.geometry import Polygon, MultiPolygon, Point
+    import sys
+    import matplotlib
+    import matplotlib.pyplot as plt
 
+    # Relative path? Assume it is to my path
+    def get_relative_path(fname):
+        if (not os.path.isabs(fname)):
+            me = sys.argv[0]
+            path = os.path.dirname (me)  
+            fname = path + "\\"+ fname
+        return fname
+    
     ###########################################
     # Read shapefile into polygon
-    shape = read_shapefile("test_data", "test.shp")
+    path = get_relative_path(r"test_data") 
+    shape = read_shapefile(path, "test.shp")
 
     ###########################################
     # Parameters
@@ -267,7 +287,7 @@ if __name__ == "__main__":
     dP=Pini-Paban
             
     # put into compound thickness multiplier
-    tComp=thick*dP*Cm;
+    tComp=thick*dP*Cm
 
     # Grid resolution
     dxy=200 # m
@@ -282,4 +302,3 @@ if __name__ == "__main__":
     ax = plot_subs_countours(X2, Y2, S2, shape)
 
     plt.show()
-

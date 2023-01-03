@@ -93,18 +93,6 @@ def gas_fvf(z, temp, pressure):
   Bg = 0.0282793 * z * temp / pressure 
   return(Bg)
 
-def gas_fvf2(unit='unit1', z=0.8, temp=186, pressure=2000):
-  """
-  Gas FVF calculated in other units
-  unit: choice of units (unit1: RB/scf, unit2: res m3/std m3)
-  for unit1, inputs temp in Rankine (Fahrenheit + 460), pressure in psia or psig
-  for unit2, inputs temp in Kelvin, pressure in psia or psig
-  """
-  if unit == 'unit1':
-    return(0.00503676 * z * temp / pressure) 
-  if unit == 'unit2':
-    return(0.350958 * z * temp / pressure)
-
 def gas_mu(temp, rhogas, sg):
   """
   Calculate Gas Viscosity 
@@ -436,3 +424,36 @@ def water_mu(temp, p, s):
   mu_w = (0.9994 + (4.0285E-5 * p) + (3.1062E-9 * (p**2))) * mu_w_atm
 
   return mu_w
+
+##########################################################################################
+# Test code
+if __name__ == "__main__":
+    # Run through the functions   
+    mu = water_mu(200, 1400, 0.1)
+    print(mu)
+    
+    bw = water_fvf(200, 1400)
+    print(bw)
+    
+    pb = water_pbubble(200)
+    print(pb)
+
+    cw = water_compressibility(200, 1400, 0.1, bw)
+    print(cw)
+    
+    (P_pc, T_pc, P_pr, T_pr) = gas_pseudoprops(200, 1400, 0.61, 0, 0.02)
+    print(P_pc, T_pc, P_pr, T_pr)
+    
+    _, z = gas_zfactor(T_pr, P_pr)
+    print(z)   
+    
+    rhogas = gas_density(200, 1400, 0.61, z)
+    print(rhogas)
+    
+    bg = gas_fvf(z, 200, 1400)
+    print(bg)
+    
+    mug = gas_mu(200, rhogas, 0.61)
+    print(mug)
+    
+ 

@@ -1,14 +1,32 @@
+'''
+Utilities to implement various time dependency calculations:
+- Read production or pressure profile (which is stored in Excel)
+- Convert production profile to pressure profile (simple PVT module is 
+  included)
+- Implement time-delay effects (currently first-order)
+'''
 import numpy as np
 import pandas as pd
-from datetime import datetime
 
-if __name__ == "__main__": # ugly
+try: # ugly, but we want it part of the library as well as stand-alone test
     import pvtcorrelation as PVT
-else:
+except ImportError:
     from . import pvtcorrelation as PVT
 
 class dry_gas:
-    def __init__(self, temp, sg, x_h2s, x_co2, x_n2):
+    '''
+    Simple class to implement dry gas bea=havior, from basic PVT/composition
+    
+    External units are field-SI (bara, degC).
+    
+    Note underlying package works in field units.
+    '''
+    def __init__(self, name, temp, sg, x_h2s, x_co2, x_n2):
+        ''' 
+        Initialize from composition 
+        '''
+        self.name = name
+        
         # degF to degC
         self._temp = temp*9/5+32
         self._sg = sg
@@ -17,17 +35,24 @@ class dry_gas:
         self._x_n2 = x_n2
 
     def zfactor(self, pressure):
+        '''
+        Calculate z-factor
+        '''
         # bar to psi
         pressure *=14.5038
         
         # calculate gas pseudoproperties 
-        P_pc, T_pc, P_pr, T_pr = PVT.gas_pseudoprops(self._temp, pressure, self._sg, self._x_h2s, self._x_co2)
+        P_pc, T_pc, P_pr, T_pr = PVT.gas_pseudoprops(self._temp, pressure, 
+                                                     self._sg, self._x_h2s, self._x_co2)
         
         # calculate gas z-factor 
         pseudo_rho, z_factor = PVT.gas_zfactor(T_pr, P_pr)
         return z_factor
         
     def p_from_pz(self, pz):
+        '''
+        Convert p/z-->p
+        '''
         # Use successive substitution
         p = pz
         p1 = 1e30
@@ -72,7 +97,8 @@ def get_merged_profile(df, c_hist, c_fc, extend_year=2050, force_january_start=T
             final_date = df_hist["Date"].values[-i]
             final_gp = df_hist["Gp"].values[-i]
             df_fc_suture = df_fc[df_fc["Date"] == final_date]
-            if (len(df_fc_suture)>0): break
+            if (len(df_fc_suture)>0): 
+                break
         indx_fc_suture = df_fc_suture.index.values[0]
         gp_fc_suture=df_fc_suture["Gp"].values[0]
 
@@ -147,7 +173,8 @@ def apply_time_lag(df, tau, value_key="Pressure", extend_year=2050):
         index Profile Date 'value_key'
     '''
     # Add empty column
-    df[value_key+"_D"] = float(0)
+    print(df, tau)
+    df[(value_key+"_D")] = float(0)
     ovals = df[value_key+"_D"].values
     
     # For now do it the ugly way, with a loop
@@ -155,7 +182,8 @@ def apply_time_lag(df, tau, value_key="Pressure", extend_year=2050):
     v1 = df[value_key].values[0]
     t1 = df['Date'].values[0]
     w1 = float(v1)
-    dt1 = np.timedelta64(1, 'D')*365.25 # Leap year cycle should be 365.2425, but year 2000 was a leap year
+    # Leap year cycle should be 365.2425, but year 2000 was a leap year
+    dt1 = np.timedelta64(1, 'D')*365.25 
     ovals[0] = w1
     for i in range(1,n):
         w0 = w1
@@ -218,13 +246,30 @@ def convert_gp_to_pressure(df, p_ini, p_aban, IGIP, gas = None):
     
     return df, p_aban, IGIP
 
+##########################################################################################
+# Test code
 if __name__ == "__main__":
+    import sys
+    import os
+    
+    import matplotlib
+    import matplotlib.pyplot as plt
+
+    # Relative path? Assume it is to my path
+    def get_relative_path(fname):
+        if (not os.path.isabs(fname)):
+            me = sys.argv[0]
+            path = os.path.dirname (me)  
+            fname = path + "\\"+ fname
+        return fname
+        
     # Read Profile
-    df = pd.read_excel(r".\test_data\test_data.xlsx", sheet_name="Profiles")
+    fname = get_relative_path(r".\test_data\test_data.xlsx")
+    df = pd.read_excel(fname, sheet_name="Profiles")
 
     # Get the relevant ones
-    c_fc = "Test FC 21 2P"
-    c_hist = "Test HIST 21"
+    c_fc = "A FC 21 2P"
+    c_hist = "A HIST 21"
 
     # Then extract the profile
     df_prod = get_merged_profile(df, c_hist, c_fc)
@@ -233,16 +278,13 @@ if __name__ == "__main__":
     L15_gas = dry_gas(110, 0.6, 0.0, 0.01, 0.01)
 
     # Convert to pressure
-    df_prod = convert_gp_to_pressure(df_prod, 340, 10, gas = L15_gas)
+    df_prod, p_aban, IGIP = convert_gp_to_pressure(df_prod, 340, None, 10, gas = L15_gas)
 
     # Apply time lag
     df_prod = apply_time_lag(df_prod, 5)
 
     # Show off
     print(df_prod)
-
-    import matplotlib
-    import matplotlib.pyplot as plt
     
     ax = df_prod.plot(x="Date", y="Pressure")
     ax = df_prod.plot(x="Date", y="Pressure_D", ax=ax)

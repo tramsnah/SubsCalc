@@ -1,3 +1,12 @@
+'''
+Functie Van Opstal (1974) The effect of base-rock rigidity on subsidence 
+due to reservoir compaction. Proc. 3rd Congr. Int. Soc. Rock Mech., 
+Denver Colorado, sept. 1974, vol 2, part B.
+
+geschreven door Karin van Thienen-Visser, TNO-AGE
+
+Te gebruiken: subsidence=vanopstal(x,y,c,k,xpm,ypm,comp)
+'''
 import numpy as np
 
 def vanopstal(x,y,c,k,xpm,ypm,comp):
@@ -74,16 +83,12 @@ def vanopstal(x,y,c,k,xpm,ypm,comp):
     #else:
     #    yyy=max(c)
     for i in range(lx):
-        r=np.sqrt((xpm[i]-x)**2+(ypm[i]-y)**2) # afstand van alle gridcellen in het reservoir t.o.v. de punten aan het oppervlak
+        # afstand van alle gridcellen in 
+        # het reservoir t.o.v. de punten aan het oppervlak
+        r=np.sqrt((xpm[i]-x)**2+(ypm[i]-y)**2) 
         
         # Geertsema oplossing
         u=((1-v)/(2*np.pi))*((2*c)/((r**2+c**2)**(3/2))) 
-        #xxx=min(r)
-        #if(xxx>4*yyy):   
-        #if (max(u)<2e-10):        
-        #    subsidence[i]=0
-        #    #print(max(u))
-        #    continue
             
         # Opstal (1974) termen die afhankelijk zijn van de straal
         n1=(r**2+(a21*k-c)**2)
@@ -144,15 +149,28 @@ def vanopstal(x,y,c,k,xpm,ypm,comp):
     return subsidence
     # einde van Van Opstal functie
 
-
+##########################################################################################
+# Test code
 if __name__ == "__main__":
+    import sys
+    import os
+    import matplotlib
+    import matplotlib.pyplot as plt
     import shapefile # This version uses PyShp rather than geopandas
     from shapely.geometry import Polygon, MultiPolygon, Point
+
+    # Relative path? Assume it is to my path
+    def get_relative_path(fname):
+        if (not os.path.isabs(fname)):
+            me = sys.argv[0]
+            path = os.path.dirname (me)  
+            fname = path + "\\"+ fname
+        return fname
 
     ###########################################
     # Read shapefile into polygon
     shape=[]
-    fname = r".\test_data\test.shp"
+    fname = get_relative_path(r"test_data\test.shp")
     print("    Loading:", fname)
     with shapefile.Reader(fname) as sf:
         shps = sf.shapes()
@@ -231,7 +249,7 @@ if __name__ == "__main__":
     dP=Pini-Paban
             
     # put into compound multiplier
-    tComp=V*dP*Cm;
+    tComp=V*dP*Cm
 
     ###########################################
     # Do the deed
@@ -257,13 +275,11 @@ if __name__ == "__main__":
     ###########################################
     # Plot
 
-    import matplotlib
-    import matplotlib.pyplot as plt
-
     # Init plot
     fig, ax = plt.subplots()
 
-    for s in shape:    
+    # Add the input shape(s)
+    for s in shape.geoms:    
         xs, ys = s.exterior.xy
         ax.plot(xs,ys,color="black",linewidth=0.3)
         
