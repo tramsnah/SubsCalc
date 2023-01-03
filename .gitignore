@@ -2,6 +2,9 @@
 # Specific ignores
 ##########################################################
 
+# Specific case folders
+subs_L12L15/
+
 # ignore all excel files
 *.xls
 *.xlsx
@@ -21,6 +24,7 @@ input_data/
 working/
 
 # For now, don't commit jupyter
+*.ipynb
 jupyter/
 
 # pictures
