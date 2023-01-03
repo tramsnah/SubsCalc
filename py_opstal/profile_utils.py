@@ -275,10 +275,10 @@ if __name__ == "__main__":
     df_prod = get_merged_profile(df, c_hist, c_fc)
 
     # Define our gas
-    L15_gas = dry_gas(110, 0.6, 0.0, 0.01, 0.01)
+    Test_gas = dry_gas("Test", 110, 0.6, 0.0, 0.01, 0.01)
 
     # Convert to pressure
-    df_prod, p_aban, IGIP = convert_gp_to_pressure(df_prod, 340, None, 10, gas = L15_gas)
+    df_prod, p_aban, IGIP = convert_gp_to_pressure(df_prod, 340, None, 10, gas = Test_gas)
 
     # Apply time lag
     df_prod = apply_time_lag(df_prod, 5)
