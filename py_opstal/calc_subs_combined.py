@@ -19,6 +19,8 @@ Example:
     test_case_1	profile_h	A HIST 21, D6 HIST 21, C Hist 21, D8 HIST 21,,
     test_case_1	profile_fc	A FC 21 2P, D6 FC 21 2P, C FC 21 2P, D8 FC 21 2P, D9 FC 21 2P, B FC 21 2P
     test_case_1	IGIP	    9.3, 1.01, 1.4, 2.6,0.9,0.9
+
+In the xls file, this is expected to be stored in the tab 'Parameters'.
 '''
 import os
 import sys
@@ -92,7 +94,8 @@ def _get_string_parameter(df, key, defval=None, n=None):
     return val
 
 ###########################################
-def handle_subs_case(subspar_xls, case, dxy=200, cmult=1.0, sheet_name="Parameters", gas=None):
+def handle_subs_case(subspar_xls, case, dxy=200, cmult=1.0, par_sheet_name="Parameters", 
+                    prof_sheet_name="Profiles", gas=None):
     '''
     handle case 'case' from the database 'subspar_xls"
     returns X2big, Y2big, S2big, df_out, df_subs, df_prod_all, lshapes
@@ -102,7 +105,7 @@ def handle_subs_case(subspar_xls, case, dxy=200, cmult=1.0, sheet_name="Paramete
     '''
     # Read Parameter DB
     print("Loading case database ", subspar_xls)
-    df = pd.read_excel(subspar_xls, sheet_name=sheet_name)
+    df = pd.read_excel(subspar_xls, sheet_name=par_sheet_name)
     print()
 
     # Get specific case data
@@ -194,7 +197,7 @@ def handle_subs_case(subspar_xls, case, dxy=200, cmult=1.0, sheet_name="Paramete
         else:
             ###########################################
             # Read Profile
-            df = pd.read_excel(subspar_xls, sheet_name="Profiles")
+            df = pd.read_excel(subspar_xls, sheet_name=prof_sheet_name)
 
             # Then extract the profile
             df_prod = PU.get_merged_profile(df, profileh[ishape], 
